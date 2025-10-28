@@ -124,18 +124,14 @@ public class LockerService {
     @Transactional
     public LockerReservation openLocker(Integer otp) {
 
-        LockerReservation reservation = lockerReservationRepository.findByUserOtpOrDeliveryOtp(otp, otp)
-                .orElseThrow(() -> new RuntimeException("Invalid OTP provided."));
+        LockerReservation reservation = lockerReservationRepository.findActiveByOtp(otp)
+                .orElseThrow(() -> new RuntimeException("Invalid or expired OTP. Locker already accessed."));
         LockerSlot slot = reservation.getLockerSlot();
-
         Instant now = Instant.now();
-
-
-        if (otp.equals(reservation.getDeliveryOtp())) {
+            if (otp.equals(reservation.getDeliveryOtp())) {
             if (reservation.getParcelPlacedAt() != null) {
                 throw new RuntimeException("This OTP has already been used to open the locker for delivery.");
             }
-
             reservation.setParcelPlacedAt(now);
             reservation.setLockerState(LockerReservation.LockerState.UNLOCKED);
             reservation.setStatus(LockerReservation.ReservationStatus.DELIVERED);
@@ -150,8 +146,10 @@ public class LockerService {
             lockerSlotRepository.save(slot);
         }
         lockerReservationRepository.save(reservation);
-
         return reservation;
 
     }
+
+
+
 }
