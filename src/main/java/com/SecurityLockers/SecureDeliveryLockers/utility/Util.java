@@ -10,7 +10,7 @@ public class Util {
         boolean exists;
         do {
             otp = 1000 + random.nextInt(9000);
-            exists = lockerReservationRepository.existsByMyOtpOrOtherOtp(otp, otp);
+            exists = lockerReservationRepository.existsByUserOtpOrDeliveryOtp(otp, otp);
         } while (exists);
         return otp;
     }

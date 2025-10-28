@@ -67,16 +67,16 @@ public class LockerService {
 
     @Transactional
     public LockerReservation reserveLocker(LockerReservationRequestDTO dto) {
-         Locker locker = lockerRepository.findById(dto.getLockerId())
+        Locker locker = lockerRepository.findById(dto.getLockerId())
                 .orElseThrow(() -> new RuntimeException("Locker not found with ID: " + dto.getLockerId()));
 
-         List<LockerSlot> freeSlots = lockerSlotRepository.findByLockerIdAndStatus(dto.getLockerId(), LockerSlot.Status.FREE);
+        List<LockerSlot> freeSlots = lockerSlotRepository.findByLockerIdAndStatus(dto.getLockerId(), LockerSlot.Status.FREE);
 
         if (freeSlots.isEmpty()) {
             throw new RuntimeException("No Free Slots Available at this time.");
         }
 
-         LockerSlot suitableSlot = freeSlots.stream()
+        LockerSlot suitableSlot = freeSlots.stream()
                 .filter(slot -> {
                     return switch (slot.getSize()) {
                         case SM -> dto.getHeight() <= 10 && dto.getWidth() <= 10;
@@ -88,12 +88,12 @@ public class LockerService {
                 .min(Comparator.comparing(slot -> slot.getSize().ordinal()))
                 .orElseThrow(() -> new RuntimeException("No suitable slot available for given parcel dimensions"));
 
-         suitableSlot.setStatus(LockerSlot.Status.RESERVED);
+        suitableSlot.setStatus(LockerSlot.Status.RESERVED);
         lockerSlotRepository.save(suitableSlot);
 
-         UUID hardcodedUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID hardcodedUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-         Instant now = Instant.now();
+        Instant now = Instant.now();
         Instant expiry = now.plusSeconds(24 * 60 * 60);
         SecureRandom random = new SecureRandom();
 
@@ -101,20 +101,57 @@ public class LockerService {
         int myOtp = Util.generateUniqueOtp(random, lockerReservationRepository);
         int otherOtp = Util.generateUniqueOtp(random, lockerReservationRepository);
 
-         LockerReservation reservation = LockerReservation.builder()
+        LockerReservation reservation = LockerReservation.builder()
                 .lockerSlot(suitableSlot)
                 .userId(hardcodedUserId)
                 .parcelHeight(dto.getHeight())
                 .parcelWidth(dto.getWidth())
                 .reservedAt(now)
                 .expiresAt(expiry)
-                 .myOtp(myOtp)
-                 .otherOtp(otherOtp)
-                 .status(LockerReservation.ReservationStatus.ACTIVE)
-                 .build();
-         emailService.sendMail("omerkhan.dev1@gmail.com",String.valueOf(myOtp) ,String.valueOf(otherOtp)  );
+                .deliveryService(dto.getDeliveryService())
+                .parcelDescription(dto.getParcelDescription())
+                .userOtp(myOtp)
+                .lockerState(LockerReservation.LockerState.LOCKED)
+                .deliveryOtp(otherOtp)
+                .status(LockerReservation.ReservationStatus.ACTIVE)
+                .build();
+        emailService.sendMail("omerkhan.dev1@gmail.com", String.valueOf(myOtp), String.valueOf(otherOtp));
 
         return lockerReservationRepository.save(reservation);
     }
 
+
+    @Transactional
+    public LockerReservation openLocker(Integer otp) {
+
+        LockerReservation reservation = lockerReservationRepository.findByUserOtpOrDeliveryOtp(otp, otp)
+                .orElseThrow(() -> new RuntimeException("Invalid OTP provided."));
+        LockerSlot slot = reservation.getLockerSlot();
+
+        Instant now = Instant.now();
+
+
+        if (otp.equals(reservation.getDeliveryOtp())) {
+            if (reservation.getParcelPlacedAt() != null) {
+                throw new RuntimeException("This OTP has already been used to open the locker for delivery.");
+            }
+
+            reservation.setParcelPlacedAt(now);
+            reservation.setLockerState(LockerReservation.LockerState.UNLOCKED);
+            reservation.setStatus(LockerReservation.ReservationStatus.DELIVERED);
+        } else if (otp.equals(reservation.getUserOtp())) {
+            if (reservation.getParcelPickedAt() != null) {
+                throw new RuntimeException("This OTP has already been used to open the locker for pickup.");
+            }
+            reservation.setParcelPickedAt(now);
+            reservation.setLockerState(LockerReservation.LockerState.LOCKED);
+            reservation.setStatus(LockerReservation.ReservationStatus.PICKED_UP);
+            slot.setStatus(LockerSlot.Status.FREE);
+            lockerSlotRepository.save(slot);
+        }
+        lockerReservationRepository.save(reservation);
+
+        return reservation;
+
+    }
 }

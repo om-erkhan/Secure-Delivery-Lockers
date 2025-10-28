@@ -4,6 +4,7 @@ import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.dto.LockerReque
 import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.dto.LockerReservationRequestDTO;
 import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.dto.LockerSlotRequestDTO;
 import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.model.Locker;
+import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.model.LockerReservation;
 import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.model.LockerSlot;
 import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.service.LockerService;
 import com.SecurityLockers.SecureDeliveryLockers.utility.ResponseBuilder;
@@ -13,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -45,5 +47,13 @@ public class LockerController {
     @PostMapping("/reserve-locker")
     public ResponseEntity<?> reserveLocker(@RequestBody LockerReservationRequestDTO dto) {
         return ResponseBuilder.success(lockerService.reserveLocker(dto), "Reserved Successfully");
+    }
+
+
+    @PostMapping("/open-locker")
+    public ResponseEntity<?> openLocker(@RequestBody Map<String, Object> payload){
+        Integer otp = (Integer) payload.get("otp");
+        LockerReservation locker = lockerService.openLocker(otp);
+        return ResponseBuilder.success(locker, "Opened Successfully");
     }
 }
