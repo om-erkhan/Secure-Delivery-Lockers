@@ -86,7 +86,7 @@ public class LockerService {
                     };
                 })
                 .min(Comparator.comparing(slot -> slot.getSize().ordinal()))
-                .orElseThrow(() -> new RuntimeException("No suitable slot available for given parcel dimensions"));
+                .orElseThrow(() -> new RuntimeException("No suitable slots available for given parcel dimensions"));
 
         suitableSlot.setStatus(LockerSlot.Status.RESERVED);
         lockerSlotRepository.save(suitableSlot);
