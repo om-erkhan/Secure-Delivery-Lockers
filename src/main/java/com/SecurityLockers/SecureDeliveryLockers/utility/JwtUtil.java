@@ -53,9 +53,9 @@ public class JwtUtil {
                 .getExpiration();
         return expiration.before(new Date());
     }
-//    public boolean validateToken(String token, Object userDetails) {
-//        final String email = extractEmail(token);
-//        return (email.equals(((com.AlaskaPlan.AlaskaPlan.modules.auth.model.User) userDetails).getEmail())
-//                && !isTokenExpired(token));
-//    }
+    public boolean validateToken(String token, Object userDetails) {
+        final String email = extractEmail(token);
+        return (email.equals(((com.SecurityLockers.SecureDeliveryLockers.modules.auth.model.User) userDetails).getEmail())
+                && !isTokenExpired(token));
+    }
 }

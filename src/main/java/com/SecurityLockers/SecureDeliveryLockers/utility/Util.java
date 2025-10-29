@@ -14,4 +14,12 @@ public class Util {
         } while (exists);
         return otp;
     }
+
+    public static int generateUniqueOtp() {
+        int otp;
+        SecureRandom random = new SecureRandom();
+
+        return otp = 1000 + random.nextInt(9000);
+
+    }
 }

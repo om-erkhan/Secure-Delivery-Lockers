@@ -12,7 +12,7 @@ import java.time.Instant;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserModel {
+public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -25,21 +25,22 @@ public class UserModel {
     @Column(nullable = false)
     private String password;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private Role role;
+    private Boolean isVerified = false;
 
-    private Boolean isActive = true;
+    @Column(unique = true, nullable = false)
+    @JsonIgnore
+    private int otp;
+
 
     private Instant createdAt = Instant.now();
-
-//    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-//    @JsonIgnoreProperties("user")
-//    private UserProfile userProfile;
-
-    public enum Role {
-        ADMIN,
-        DELIVERY_PERSON,
-        CUSTOMER
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = Instant.now();
     }
+
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
+    @JsonIgnoreProperties("user")
+    private UserProfile userProfile;
+
+
 }
