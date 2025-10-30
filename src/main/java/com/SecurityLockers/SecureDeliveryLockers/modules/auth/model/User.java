@@ -27,6 +27,10 @@ public class User {
 
     private Boolean isVerified = false;
 
+    private  Boolean isProfileCompleted = false;
+
+
+
     @Column(unique = true, nullable = false)
     @JsonIgnore
     private int otp;
@@ -36,6 +40,7 @@ public class User {
     @PrePersist
     protected void onCreate() {
         this.createdAt = Instant.now();
+        this.isProfileCompleted = false;
     }
 
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)

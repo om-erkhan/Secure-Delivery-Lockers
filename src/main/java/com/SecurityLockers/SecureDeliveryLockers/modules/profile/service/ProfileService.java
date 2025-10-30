@@ -3,9 +3,10 @@ package com.SecurityLockers.SecureDeliveryLockers.modules.profile.service;
 import com.SecurityLockers.SecureDeliveryLockers.modules.auth.model.User;
 import com.SecurityLockers.SecureDeliveryLockers.modules.auth.model.UserProfile;
 import com.SecurityLockers.SecureDeliveryLockers.modules.auth.repository.AuthRepository;
- import com.SecurityLockers.SecureDeliveryLockers.modules.profile.dto.CreateProfileDto;
+import com.SecurityLockers.SecureDeliveryLockers.modules.profile.dto.CreateProfileDto;
 import com.SecurityLockers.SecureDeliveryLockers.modules.profile.repository.ProfileRepository;
 import com.SecurityLockers.SecureDeliveryLockers.services.S3Service;
+import com.SecurityLockers.SecureDeliveryLockers.utility.AuthUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
@@ -27,24 +28,27 @@ public class ProfileService {
     @Autowired
     private S3Service s3Service;
 
+    @Autowired
+    private AuthUtils authUtils;
+
     public UserProfile createProfile(CreateProfileDto dto) throws Exception {
         log.info("---- Controller hit: /create-profile ----");
-        log.info("Received file: {}",dto.getProfileImage()  != null ? dto.getProfileImage().getOriginalFilename() : "null");
+        log.info("Received file: {}", dto.getProfileImage() != null ? dto.getProfileImage().getOriginalFilename() : "null");
 
-         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        String email = authentication.getName();
+        User user = authUtils.getCurrentUser();
 
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new Exception("User not found for email: " + email));
+        if(user.getIsProfileCompleted()){
+            throw new RuntimeException("Profile is already completed");
+        }
 
 
-         String imageUrl = null;
+        String imageUrl = null;
 
         if (dto.getProfileImage() != null && !dto.getProfileImage().isEmpty()) {
             imageUrl = s3Service.uploadFile(dto.getProfileImage());
         }
 
-         UserProfile profile = UserProfile.builder()
+        UserProfile profile = UserProfile.builder()
                 .fullName(dto.getFullName())
                 .phoneNumber(dto.getPhoneNumber())
                 .address(dto.getAddress())
@@ -54,6 +58,9 @@ public class ProfileService {
                 .user(user)
                 .build();
 
-         return profileRepository.save(profile);
+        user.setIsProfileCompleted(true);
+
+        userRepository.save(user);
+        return profileRepository.save(profile);
     }
 }
