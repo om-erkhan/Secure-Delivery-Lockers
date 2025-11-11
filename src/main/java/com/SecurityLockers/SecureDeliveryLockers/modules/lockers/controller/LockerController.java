@@ -45,7 +45,7 @@ public class LockerController {
     }
 
     @PostMapping("/reserve-locker")
-    public ResponseEntity<?> reserveLocker(@RequestBody LockerReservationRequestDTO dto) {
+    public ResponseEntity<?> reserveLocker(@RequestBody LockerReservationRequestDTO dto) throws Exception {
         return ResponseBuilder.success(lockerService.reserveLocker(dto), "Reserved Successfully");
     }
 

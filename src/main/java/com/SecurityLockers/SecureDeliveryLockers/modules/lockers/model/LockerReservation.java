@@ -23,7 +23,7 @@ public class LockerReservation {
 
 
     @Column(name = "user_id", nullable = false)
-    private UUID userId;
+    private Long userId;
 
     @Column(name = "delivery_service",nullable = false)
     private String deliveryService;

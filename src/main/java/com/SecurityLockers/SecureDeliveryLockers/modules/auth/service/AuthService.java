@@ -50,8 +50,7 @@ public class AuthService {
                 .build();
 
         authRepository.save(user);
-
-        emailService.sendMail(dto.getEmail(), "Your OTP code: " + otp);
+           emailService.sendMail(dto.getEmail(), "Your OTP code: " + otp);
         return user;
     }
 

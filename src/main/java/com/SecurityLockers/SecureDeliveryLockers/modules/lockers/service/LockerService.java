@@ -1,5 +1,6 @@
 package com.SecurityLockers.SecureDeliveryLockers.modules.lockers.service;
 
+import com.SecurityLockers.SecureDeliveryLockers.modules.auth.model.User;
 import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.dto.LockerRequestDTO;
 import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.dto.LockerSlotRequestDTO;
 import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.dto.LockerReservationRequestDTO;
@@ -9,6 +10,7 @@ import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.model.LockerSlo
 import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.repository.LockerRepository;
 import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.repository.LockerReservationRepository;
 import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.repository.LockerSlotRepository;
+import com.SecurityLockers.SecureDeliveryLockers.utility.AuthUtils;
 import com.SecurityLockers.SecureDeliveryLockers.utility.EmailService;
 import com.SecurityLockers.SecureDeliveryLockers.utility.Util;
 import jakarta.transaction.Transactional;
@@ -35,6 +37,10 @@ public class LockerService {
 
     @Autowired
     private EmailService emailService;
+
+
+    @Autowired
+    private AuthUtils authUtils;
 
 
     public Locker createLocker(LockerRequestDTO lockerRequest) {
@@ -66,7 +72,12 @@ public class LockerService {
     }
 
     @Transactional
-    public LockerReservation reserveLocker(LockerReservationRequestDTO dto) {
+    public LockerReservation reserveLocker(LockerReservationRequestDTO dto) throws Exception {
+        User user = authUtils.getCurrentUser();
+        if(user == null){
+            throw new RuntimeException("User Not Found.");
+        }
+
         Locker locker = lockerRepository.findById(dto.getLockerId())
                 .orElseThrow(() -> new RuntimeException("Locker not found with ID: " + dto.getLockerId()));
 
@@ -91,8 +102,6 @@ public class LockerService {
         suitableSlot.setStatus(LockerSlot.Status.RESERVED);
         lockerSlotRepository.save(suitableSlot);
 
-        UUID hardcodedUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-
         Instant now = Instant.now();
         Instant expiry = now.plusSeconds(24 * 60 * 60);
         SecureRandom random = new SecureRandom();
@@ -103,7 +112,7 @@ public class LockerService {
 
         LockerReservation reservation = LockerReservation.builder()
                 .lockerSlot(suitableSlot)
-                .userId(hardcodedUserId)
+                .userId(  user.getId() )
                 .parcelHeight(dto.getHeight())
                 .parcelWidth(dto.getWidth())
                 .reservedAt(now)

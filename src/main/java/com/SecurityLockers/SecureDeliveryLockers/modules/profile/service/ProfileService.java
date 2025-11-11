@@ -36,7 +36,6 @@ public class ProfileService {
         log.info("Received file: {}", dto.getProfileImage() != null ? dto.getProfileImage().getOriginalFilename() : "null");
 
         User user = authUtils.getCurrentUser();
-
         if(user.getIsProfileCompleted()){
             throw new RuntimeException("Profile is already completed");
         }

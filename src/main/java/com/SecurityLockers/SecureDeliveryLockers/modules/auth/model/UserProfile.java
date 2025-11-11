@@ -19,7 +19,6 @@ public class UserProfile {
 
     private String fullName;
 
-    @Column(unique = true)
     private String phoneNumber;
 
     private String address;

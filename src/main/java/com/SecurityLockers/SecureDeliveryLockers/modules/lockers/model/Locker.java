@@ -1,7 +1,5 @@
 package com.SecurityLockers.SecureDeliveryLockers.modules.lockers.model;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
-import com.fasterxml.jackson.annotation.JsonBackReference;
-
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.Instant;
