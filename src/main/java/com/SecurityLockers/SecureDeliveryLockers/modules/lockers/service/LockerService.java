@@ -16,6 +16,7 @@ import com.SecurityLockers.SecureDeliveryLockers.utility.EmailService;
 import com.SecurityLockers.SecureDeliveryLockers.utility.Util;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 import java.security.SecureRandom;
@@ -23,6 +24,8 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 @Component
 public class LockerService {
@@ -45,16 +48,67 @@ public class LockerService {
     @Autowired
     private AuthUtils authUtils;
 
+    @Autowired
+    private Executor asyncExecutor;
+//    @Autowired
+//    private LockerAsyncService lockerAsyncService;
 
-    public Locker createLocker(LockerRequestDTO lockerRequest) {
-        Locker locker = new Locker();
-        locker.setLocation(lockerRequest.getLocation());
-        locker.setLatitude(lockerRequest.getLatitude());
-        locker.setLongitude(lockerRequest.getLongitude());
-        locker.setTotalSlots(lockerRequest.getTotalSlots());
-        locker.setCreatedAt(Instant.now());
-        return lockerRepository.save(locker);
+
+//    public Locker createLocker(LockerRequestDTO lockerRequest) throws Exception {
+//        CompletableFuture<String> imageUploadFuture;
+//
+//        if (lockerRequest.getLockerImage() != null && !lockerRequest.getLockerImage().isEmpty()) {
+//            imageUploadFuture = CompletableFuture.supplyAsync(()-> {
+//                try {
+//               return s3Service.uploadFile(lockerRequest.getLockerImage());
+//                } catch (Exception e) {
+//                    throw new RuntimeException(e);
+//                }
+//            });
+//
+//        }else{
+//            imageUploadFuture = CompletableFuture.completedFuture("");
+//        }
+//        String lockerImage = imageUploadFuture.get();
+//        Locker locker = Locker.builder().
+//                location(lockerRequest.getLocation()).
+//                latitude(lockerRequest.getLatitude()).
+//                lockerImage(lockerImage).
+//                longitude(lockerRequest.getLongitude()).
+//                totalSlots(lockerRequest.getTotalSlots()).
+//                createdAt(Instant.now()).build();
+//        return lockerRepository.save(locker);
+//    }
+
+
+    @Async("asyncExecutor")
+    public CompletableFuture<Locker> createLockerAsync(LockerRequestDTO dto) {
+        try {
+            String imageUrl = null;
+
+            if (dto.getLockerImage() != null && !dto.getLockerImage().isEmpty()) {
+                imageUrl = s3Service.uploadFile(dto.getLockerImage());
+            }
+
+            Locker locker = Locker.builder()
+                    .location(dto.getLocation())
+                    .latitude(dto.getLatitude())
+                    .longitude(dto.getLongitude())
+                    .totalSlots(dto.getTotalSlots())
+                    .lockerImage(imageUrl)
+                    .createdAt(Instant.now())
+                    .build();
+
+            Locker savedLocker = lockerRepository.save(locker);
+
+            return CompletableFuture.completedFuture(savedLocker);
+
+        } catch (Exception e) {
+            return CompletableFuture.failedFuture(e);
+        }
     }
+
+
 
     public List<Locker> getLockers() {
         return lockerRepository.findAll();
@@ -77,7 +131,7 @@ public class LockerService {
     @Transactional
     public LockerReservation reserveLocker(LockerReservationRequestDTO dto) throws Exception {
         User user = authUtils.getCurrentUser();
-        if(user == null){
+        if (user == null) {
             throw new RuntimeException("User Not Found.");
         }
         Locker locker = lockerRepository.findById(dto.getLockerId())
@@ -114,7 +168,7 @@ public class LockerService {
 
         LockerReservation reservation = LockerReservation.builder()
                 .lockerSlot(suitableSlot)
-                .userId(  user.getId() )
+                .userId(user.getId())
                 .parcelHeight(dto.getHeight())
                 .parcelWidth(dto.getWidth())
                 .reservedAt(now)
@@ -139,7 +193,7 @@ public class LockerService {
                 .orElseThrow(() -> new RuntimeException("Invalid or expired OTP. Locker already accessed."));
         LockerSlot slot = reservation.getLockerSlot();
         Instant now = Instant.now();
-            if (otp.equals(reservation.getDeliveryOtp())) {
+        if (otp.equals(reservation.getDeliveryOtp())) {
             if (reservation.getParcelPlacedAt() != null) {
                 throw new RuntimeException("This OTP has already been used to open the locker for delivery.");
             }
@@ -160,7 +214,6 @@ public class LockerService {
         return reservation;
 
     }
-
 
 
 }

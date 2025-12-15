@@ -23,6 +23,7 @@ public class Locker {
     private String location;
     private Double latitude;
     private Double longitude;
+    private String lockerImage;
 
     @Column(name = "total_slots")
     private Integer totalSlots;

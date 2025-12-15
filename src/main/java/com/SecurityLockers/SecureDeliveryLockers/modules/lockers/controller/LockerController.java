@@ -1,5 +1,6 @@
 package com.SecurityLockers.SecureDeliveryLockers.modules.lockers.controller;
 
+import com.SecurityLockers.SecureDeliveryLockers.entity.ApiResponse;
 import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.dto.LockerRequestDTO;
 import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.dto.LockerReservationRequestDTO;
 import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.dto.LockerSlotRequestDTO;
@@ -10,12 +11,15 @@ import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.service.LockerS
 import com.SecurityLockers.SecureDeliveryLockers.utility.ResponseBuilder;
 import org.apache.coyote.Response;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 @RestController
 @RequestMapping("/api/lockers")
@@ -25,11 +29,28 @@ public class LockerController {
     @Autowired
     private LockerService lockerService;
 
-    @PostMapping("/create")
-    public ResponseEntity<?> createLocker(@RequestBody LockerRequestDTO lockerRequestDTO) {
-        Locker createdLocker = lockerService.createLocker(lockerRequestDTO);
-        return ResponseBuilder.success(createdLocker, "Locker created successfully");
+    //    @PostMapping(value = "/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+//    public ResponseEntity<ApiResponse<String>> createLocker(@ModelAttribute LockerRequestDTO lockerRequestDTO) {
+//
+//        lockerService .createLocker(lockerRequestDTO);
+//
+//        return ResponseBuilder.success("Locker creation started", "Processing in background");
+//    }
+    @PostMapping(
+            value = "/create",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
+    public ResponseEntity<ApiResponse<String>> createLocker(
+            @ModelAttribute LockerRequestDTO lockerRequestDTO) {
+
+        lockerService.createLockerAsync(lockerRequestDTO);
+
+        return ResponseBuilder.success(
+                "Locker creation started",
+                "Processing in background"
+        );
     }
+
 
     @GetMapping("/get-all")
     public ResponseEntity<?> getAllLockers() {
@@ -51,7 +72,7 @@ public class LockerController {
 
 
     @PostMapping("/open-locker")
-    public ResponseEntity<?> openLocker(@RequestBody Map<String, Object> payload){
+    public ResponseEntity<?> openLocker(@RequestBody Map<String, Object> payload) {
         Integer otp = (Integer) payload.get("otp");
         LockerReservation locker = lockerService.openLocker(otp);
         return ResponseBuilder.success(locker, "Opened Successfully");
