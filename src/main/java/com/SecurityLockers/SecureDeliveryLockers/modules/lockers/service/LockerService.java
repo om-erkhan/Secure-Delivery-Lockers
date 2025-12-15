@@ -10,6 +10,7 @@ import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.model.LockerSlo
 import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.repository.LockerRepository;
 import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.repository.LockerReservationRepository;
 import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.repository.LockerSlotRepository;
+import com.SecurityLockers.SecureDeliveryLockers.services.S3Service;
 import com.SecurityLockers.SecureDeliveryLockers.utility.AuthUtils;
 import com.SecurityLockers.SecureDeliveryLockers.utility.EmailService;
 import com.SecurityLockers.SecureDeliveryLockers.utility.Util;
@@ -38,6 +39,8 @@ public class LockerService {
     @Autowired
     private EmailService emailService;
 
+    @Autowired
+    private S3Service s3Service;
 
     @Autowired
     private AuthUtils authUtils;
@@ -77,7 +80,6 @@ public class LockerService {
         if(user == null){
             throw new RuntimeException("User Not Found.");
         }
-
         Locker locker = lockerRepository.findById(dto.getLockerId())
                 .orElseThrow(() -> new RuntimeException("Locker not found with ID: " + dto.getLockerId()));
 

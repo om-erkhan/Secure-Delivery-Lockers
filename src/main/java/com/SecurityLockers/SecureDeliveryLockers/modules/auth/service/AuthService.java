@@ -3,6 +3,8 @@ package com.SecurityLockers.SecureDeliveryLockers.modules.auth.service;
 import com.SecurityLockers.SecureDeliveryLockers.modules.auth.dto.RegisterRequestDTO;
 import com.SecurityLockers.SecureDeliveryLockers.modules.auth.model.User;
 import com.SecurityLockers.SecureDeliveryLockers.modules.auth.repository.AuthRepository;
+import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.dto.AuthResponse;
+import com.SecurityLockers.SecureDeliveryLockers.utility.AuthEnums;
 import com.SecurityLockers.SecureDeliveryLockers.utility.EmailService;
 import com.SecurityLockers.SecureDeliveryLockers.utility.JwtUtil;
 import com.SecurityLockers.SecureDeliveryLockers.utility.Util;
@@ -25,34 +27,37 @@ public class AuthService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-
     @Autowired
     private JwtUtil jwtUtil;
 
-    @Transactional
-    public User register(RegisterRequestDTO dto) {
-        if (!dto.getPassword().equals(dto.getConfirmPassword())) {
-            throw new RuntimeException("Passwords don't match");
+    public AuthResponse login(RegisterRequestDTO dto) {
+        Optional<User> optionalUser = authRepository.findByEmail(dto.getEmail());
+//       for user login
+        if (optionalUser.isPresent()) {
+            User user = optionalUser.get();
+            if (!passwordEncoder.matches(dto.getPassword(), user.getPassword())) {
+                return new AuthResponse(null, "Wrong Password", AuthEnums.WRONG_PASSWORD);
+            }
+            if (!user.getIsVerified()) {
+                return new AuthResponse(null, "User exists but not verified. Please verify OTP.", AuthEnums.OTP_REQUIRED);
+            }
+            String token = jwtUtil.generateToken(user.getEmail());
+            return new AuthResponse(token, "Login successful", AuthEnums.LOGIN_SUCCESS);
         }
-
-         if (authRepository.findByEmail(dto.getEmail()).isPresent()) {
-            throw new RuntimeException("User with this email already exists");
-        }
-
+//        for signup
         int otp = Util.generateUniqueOtp();
         String hashedPassword = passwordEncoder.encode(dto.getPassword());
-
-        User user = User.builder()
+        User newUser = User.builder()
                 .email(dto.getEmail())
                 .password(hashedPassword)
                 .otp(otp)
                 .isVerified(false)
                 .build();
-
-        authRepository.save(user);
-           emailService.sendMail(dto.getEmail(), "Your OTP code: " + otp);
-        return user;
+        authRepository.save(newUser);
+        emailService.sendMail(dto.getEmail(), "Your OTP code: " + otp);
+        return new AuthResponse(null, "Otp sent to your email. Please verify.", AuthEnums.OTP_SENT);
     }
+
 
     @Transactional
     public String verifyOtp(String email, String otp) {
@@ -72,7 +77,7 @@ public class AuthService {
             throw new RuntimeException("Invalid OTP");
         }
 
-         user.setIsVerified(true);
+        user.setIsVerified(true);
         authRepository.save(user);
 
         return jwtUtil.generateToken(user.getEmail());

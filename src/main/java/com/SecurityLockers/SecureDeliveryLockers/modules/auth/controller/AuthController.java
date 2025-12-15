@@ -2,8 +2,8 @@ package com.SecurityLockers.SecureDeliveryLockers.modules.auth.controller;
 
 
 import com.SecurityLockers.SecureDeliveryLockers.modules.auth.dto.RegisterRequestDTO;
-import com.SecurityLockers.SecureDeliveryLockers.modules.auth.model.User;
 import com.SecurityLockers.SecureDeliveryLockers.modules.auth.service.AuthService;
+import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.dto.AuthResponse;
 import com.SecurityLockers.SecureDeliveryLockers.utility.ResponseBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -22,10 +23,13 @@ public class AuthController {
     private AuthService authService;
 
 
-    @PostMapping("/register")
-    public ResponseEntity <?> registerUser(@RequestBody RegisterRequestDTO request){
-       User res =  authService.register(request);
-        return ResponseBuilder.success(res , "Otp is sent to your Mail, please verify to proceed.");
+    @PostMapping("/login")
+    public ResponseEntity <?> login(@RequestBody RegisterRequestDTO request){
+        AuthResponse res =  authService.login(request);
+        Map<String,Object> data= new HashMap<>();
+        data.put("status", res.getStatus());
+        data.put("token", res.getToken());
+        return ResponseBuilder.success( data  , res.getMessage());
     }
 
     @PostMapping("/verify-otp")

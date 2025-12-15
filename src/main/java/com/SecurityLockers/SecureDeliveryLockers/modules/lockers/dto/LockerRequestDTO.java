@@ -1,6 +1,7 @@
 package com.SecurityLockers.SecureDeliveryLockers.modules.lockers.dto;
 
 import lombok.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @Data
 @Builder
@@ -11,4 +12,5 @@ public class LockerRequestDTO {
     private Double latitude;
     private Double longitude;
     private Integer totalSlots;
+    private MultipartFile lockerImage;
 }
