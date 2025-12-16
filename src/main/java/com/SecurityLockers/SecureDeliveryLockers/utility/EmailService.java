@@ -19,13 +19,21 @@ public class EmailService {
         mailSender.send(message);
     }
 
-    public boolean sendMail(String to, String userOtp) {
+    public void sendMail(String to, String userOtp) {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setTo(to);
         message.setSubject("Your Otp Code");
         message.setText("Your OTP code for registration is: " + userOtp + "\nThis code will expire in 5 minutes.");
         mailSender.send(message);
-        return true;
+    }
+
+    public void sendMail(  String to,String subject,String text , String nothing){
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(to);
+        message.setSubject(subject);
+        message.setText(text);
+        mailSender.send(message);
+
     }
 
 

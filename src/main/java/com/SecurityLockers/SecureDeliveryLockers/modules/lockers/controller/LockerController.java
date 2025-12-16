@@ -29,26 +29,24 @@ public class LockerController {
     @Autowired
     private LockerService lockerService;
 
-    //    @PostMapping(value = "/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-//    public ResponseEntity<ApiResponse<String>> createLocker(@ModelAttribute LockerRequestDTO lockerRequestDTO) {
-//
-//        lockerService .createLocker(lockerRequestDTO);
-//
-//        return ResponseBuilder.success("Locker creation started", "Processing in background");
-//    }
     @PostMapping(
             value = "/create",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE
     )
-    public ResponseEntity<ApiResponse<String>> createLocker(
+    public ResponseEntity<?> createLocker(
             @ModelAttribute LockerRequestDTO lockerRequestDTO) {
 
-        lockerService.createLockerAsync(lockerRequestDTO);
+        try {
+            Locker res = lockerService.createLocker(lockerRequestDTO);
+            return ResponseBuilder.success(
+                    res,
+                    "Locker Created Successfully"
+            );
+        }catch (Exception ex){
+            return ResponseBuilder.error(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage());
 
-        return ResponseBuilder.success(
-                "Locker creation started",
-                "Processing in background"
-        );
+        }
+
     }
 
 
@@ -59,15 +57,15 @@ public class LockerController {
     }
 
 
-    @PostMapping("/{lockerId}/create-slot")
+    @PostMapping("/create-slot/{lockerId}")
     public ResponseEntity<?> createLockerSlot(@PathVariable("lockerId") UUID lockerId, @RequestBody LockerSlotRequestDTO dto) {
         LockerSlot slot = lockerService.createLockerSlot(lockerId, dto);
         return ResponseBuilder.success(slot, "Slot Created Successfully");
     }
 
-    @PostMapping("/reserve-locker")
-    public ResponseEntity<?> reserveLocker(@RequestBody LockerReservationRequestDTO dto) throws Exception {
-        return ResponseBuilder.success(lockerService.reserveLocker(dto), "Reserved Successfully");
+    @PostMapping("/reserve-locker/{lockerId}")
+    public ResponseEntity<?> reserveLocker( @PathVariable("lockerId") UUID lockerId, @RequestBody LockerReservationRequestDTO dto) throws Exception {
+        return ResponseBuilder.success(lockerService.reserveLocker(lockerId,dto), "Reserved Successfully");
     }
 
 
@@ -76,5 +74,11 @@ public class LockerController {
         Integer otp = (Integer) payload.get("otp");
         LockerReservation locker = lockerService.openLocker(otp);
         return ResponseBuilder.success(locker, "Opened Successfully");
+    }
+
+    @GetMapping("/get-reservations")
+    public ResponseEntity<?> getReservations(){
+        List<LockerReservation> reservations = lockerService.getReservations();
+        return ResponseBuilder.success(reservations, "All Reservations Fetched Successfully");
     }
 }

@@ -10,7 +10,9 @@ import java.util.UUID;
 
 public interface LockerReservationRepository  extends JpaRepository<LockerReservation, UUID> {
     boolean existsByUserOtpOrDeliveryOtp(Integer userOtp, Integer deliveryOtp);
-    @Query("SELECT r FROM LockerReservation r WHERE (r.userOtp = :otp OR r.deliveryOtp = :otp) AND r.status NOT IN ('DELIVERED', 'PICKED_UP')")
-    Optional<LockerReservation> findActiveByOtp(@Param("otp") Integer otp);
+
+    @Query("SELECT r FROM LockerReservation r WHERE r.userOtp = :otp OR r.deliveryOtp = :otp")
+    Optional<LockerReservation> findByAnyOtp(@Param("otp") Integer otp);
+
 
 }

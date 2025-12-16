@@ -8,7 +8,6 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 public class LockerSlotRequestDTO {
-    private Integer slotNumber;
     private LockerSlot.Size size;
     private LockerSlot.Status status;
 }

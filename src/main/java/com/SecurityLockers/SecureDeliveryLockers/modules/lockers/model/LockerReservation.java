@@ -28,16 +28,18 @@ public class LockerReservation {
     @Column(name = "delivery_service",nullable = false)
     private String deliveryService;
 
-
-
-    @Column(name = "parcel_height", nullable = false)
-    private double parcelHeight;
-
-    @Column(name = "parcel_width", nullable = false)
-    private double parcelWidth;
-
     @Column(name = "parcel_description")
     private String parcelDescription;
+
+    @Column(name = "parcel_value")
+    private String parcelValue;
+
+
+    @Column(name = "special_instruction")
+    private String specialInstructions;
+
+    @Column(name = "contact_number")
+    private double contactNumber;
 
      @Column(name = "user_otp", nullable = false)
     private Integer userOtp;

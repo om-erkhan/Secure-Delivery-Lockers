@@ -9,7 +9,9 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "locker_slots")
+@Table(name = "locker_slots",uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"locker_id","slot_number"})
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -27,7 +29,7 @@ public class LockerSlot {
     @JsonBackReference
     private Locker locker;
 
-    @Column(name = "slot_number")
+    @Column(name = "slot_number",nullable = false)
     private Integer slotNumber;
 
     @Enumerated(EnumType.STRING)

@@ -1,5 +1,6 @@
 package com.SecurityLockers.SecureDeliveryLockers.modules.lockers.dto;
 
+import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.model.LockerSlot;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -12,9 +13,11 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class LockerReservationRequestDTO {
-    private Integer height;
-    private Integer width;
+
+    private LockerSlot.Size size;
+    private String parcelValue;
     private String parcelDescription;
     private String deliveryService;
-    private UUID lockerId;
+    private String specialInstructions;
+    private double contactNumber;
 }
