@@ -30,6 +30,9 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import java.time.Duration;
+
 
 @Slf4j
 @Component
@@ -58,6 +61,11 @@ public class LockerService {
 
     @Autowired
     private Executor asyncExecutor;
+
+
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
 
     public Locker createLocker(LockerRequestDTO dto) throws Exception {
         String imageUrl = null;
@@ -134,9 +142,15 @@ public class LockerService {
         Instant expiry = now.plusSeconds(24 * 60 * 60);
         SecureRandom random = new SecureRandom();
 
-
         int myOtp = Util.generateUniqueOtp(random, lockerReservationRepository);
         int otherOtp = Util.generateUniqueOtp(random, lockerReservationRepository);
+
+        String userOtpKey = "OTP:USER:" + user.getId() + ":" + lockerId;
+        String deliveryOtpKey = "OTP:DELIVERY:" + user.getId() + ":" + lockerId;
+
+        redisTemplate.opsForValue().set(userOtpKey, String.valueOf(myOtp), Duration.ofMinutes(5));
+        redisTemplate.opsForValue().set(deliveryOtpKey, String.valueOf(otherOtp), Duration.ofMinutes(30));
+
 
         LockerReservation reservation = LockerReservation.builder()
                 .lockerSlot(suitableSlot)
@@ -163,8 +177,35 @@ public class LockerService {
     @Transactional
     public LockerReservation openLocker(Integer otp) {
 
+        LockerReservation reservation = null;
 
-        LockerReservation reservation = lockerReservationRepository.findByAnyOtp(otp)
+        List<LockerReservation> activeReservations = lockerReservationRepository.findAll(); // keep original DB logic
+
+        for (LockerReservation r : activeReservations) {
+            String userKey = "OTP:USER:" + r.getUserId() + ":" + r.getId();
+            String deliveryKey = "OTP:DELIVERY:" + r.getUserId() + ":" + r.getId();
+
+            String cachedUserOtp = redisTemplate.opsForValue().get(userKey);
+            String cachedDeliveryOtp = redisTemplate.opsForValue().get(deliveryKey);
+
+            if (cachedUserOtp != null && otp.equals(Integer.parseInt(cachedUserOtp))) {
+                reservation = r;
+                redisTemplate.delete(userKey); // remove from cache
+                break;
+            } else if (cachedDeliveryOtp != null && otp.equals(Integer.parseInt(cachedDeliveryOtp))) {
+                reservation = r;
+                redisTemplate.delete(deliveryKey);
+                break;
+            }
+        }
+
+         if (reservation == null) {
+            reservation = lockerReservationRepository.findByAnyOtp(otp)
+                    .orElseThrow(() -> new RuntimeException("Invalid or expired OTP"));
+        }
+
+
+          reservation = lockerReservationRepository.findByAnyOtp(otp)
                 .orElseThrow(() -> new RuntimeException("Invalid or expired OTP. Locker already accessed."));
         LockerSlot slot = reservation.getLockerSlot();
         User user = authRepository.findById(reservation.getUserId())

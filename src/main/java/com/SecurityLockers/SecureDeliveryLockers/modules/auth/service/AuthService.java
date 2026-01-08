@@ -32,6 +32,7 @@ public class AuthService {
 
     public AuthResponse login(RegisterRequestDTO dto) {
         Optional<User> optionalUser = authRepository.findByEmail(dto.getEmail());
+                int otp = Util.generateUniqueOtp();
 //       for user login
         if (optionalUser.isPresent()) {
             User user = optionalUser.get();
@@ -39,13 +40,15 @@ public class AuthService {
                 return new AuthResponse(null, "Wrong Password", AuthEnums.WRONG_PASSWORD);
             }
             if (!user.getIsVerified()) {
+               user.setOtp(otp);
+                authRepository.save(user);
+                emailService.sendMail(user.getEmail(), "Your OTP code: " + otp);
                 return new AuthResponse(null, "User exists but not verified. Please verify OTP.", AuthEnums.OTP_REQUIRED);
             }
             String token = jwtUtil.generateToken(user.getEmail());
             return new AuthResponse(token, "Login successful", AuthEnums.LOGIN_SUCCESS);
         }
 //        for signup
-        int otp = Util.generateUniqueOtp();
         String hashedPassword = passwordEncoder.encode(dto.getPassword());
         User newUser = User.builder()
                 .email(dto.getEmail())
@@ -70,7 +73,7 @@ public class AuthService {
         User user = userOptional.get();
 
         if (user.getIsVerified() != null && user.getIsVerified()) {
-            throw new RuntimeException("User is already verified");
+            throw new RuntimeException("User is already verified.");
         }
 
         if (!String.valueOf(user.getOtp()).equals(otp)) {
