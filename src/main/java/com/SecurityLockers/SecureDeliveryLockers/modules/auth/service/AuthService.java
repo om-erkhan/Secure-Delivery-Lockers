@@ -10,9 +10,11 @@ import com.SecurityLockers.SecureDeliveryLockers.utility.JwtUtil;
 import com.SecurityLockers.SecureDeliveryLockers.utility.Util;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.util.Optional;
 
 @Component
@@ -30,9 +32,13 @@ public class AuthService {
     @Autowired
     private JwtUtil jwtUtil;
 
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
+
     public AuthResponse login(RegisterRequestDTO dto) {
         Optional<User> optionalUser = authRepository.findByEmail(dto.getEmail());
-                int otp = Util.generateUniqueOtp();
+        int otp = Util.generateUniqueOtp();
 //       for user login
         if (optionalUser.isPresent()) {
             User user = optionalUser.get();
@@ -40,12 +46,14 @@ public class AuthService {
                 return new AuthResponse(null, "Wrong Password", AuthEnums.WRONG_PASSWORD);
             }
             if (!user.getIsVerified()) {
-               user.setOtp(otp);
-                authRepository.save(user);
+                String otpKey = "OTP:USER:" + user.getEmail();
+                redisTemplate.opsForValue().set(otpKey, String.valueOf(otp), Duration.ofMinutes(5)); // expires in 5 mins
                 emailService.sendMail(user.getEmail(), "Your OTP code: " + otp);
                 return new AuthResponse(null, "User exists but not verified. Please verify OTP.", AuthEnums.OTP_REQUIRED);
             }
             String token = jwtUtil.generateToken(user.getEmail());
+            String sessionKey = "SESSION:" + token;
+            redisTemplate.opsForValue().set(sessionKey, user.getEmail(), Duration.ofHours(2));
             return new AuthResponse(token, "Login successful", AuthEnums.LOGIN_SUCCESS);
         }
 //        for signup
@@ -53,10 +61,12 @@ public class AuthService {
         User newUser = User.builder()
                 .email(dto.getEmail())
                 .password(hashedPassword)
-                .otp(otp)
                 .isVerified(false)
                 .build();
         authRepository.save(newUser);
+
+        String otpKey = "OTP:USER:" + newUser.getEmail();
+        redisTemplate.opsForValue().set(otpKey, String.valueOf(otp), Duration.ofMinutes(5));
         emailService.sendMail(dto.getEmail(), "Your OTP code: " + otp);
         return new AuthResponse(null, "Otp sent to your email. Please verify.", AuthEnums.OTP_SENT);
     }
@@ -64,25 +74,42 @@ public class AuthService {
 
     @Transactional
     public String verifyOtp(String email, String otp) {
-        Optional<User> userOptional = authRepository.findByEmail(email);
+        String otpKey = "OTP:USER:" + email;
+        String cachedOtp = redisTemplate.opsForValue().get(otpKey);
 
-        if (userOptional.isEmpty()) {
-            throw new RuntimeException("User not found");
+        if (cachedOtp == null) {
+            throw new RuntimeException("OTP expired or not found");
         }
 
-        User user = userOptional.get();
+        if (!cachedOtp.equals(otp)) {
+            throw new RuntimeException("Invalid OTP");
+        }
+        redisTemplate.delete(otpKey);
+
+        User user = authRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
         if (user.getIsVerified() != null && user.getIsVerified()) {
             throw new RuntimeException("User is already verified.");
         }
 
-        if (!String.valueOf(user.getOtp()).equals(otp)) {
-            throw new RuntimeException("Invalid OTP");
-        }
-
         user.setIsVerified(true);
         authRepository.save(user);
 
-        return jwtUtil.generateToken(user.getEmail());
+
+        String token = jwtUtil.generateToken(user.getEmail());
+        String sessionKey = "SESSION:" + token;
+        redisTemplate.opsForValue().set(sessionKey, user.getEmail(), Duration.ofHours(2));
+
+        return token;
+    }
+    public void logout(String token) {
+        String sessionKey = "SESSION:" + token;
+        redisTemplate.delete(sessionKey);
+    }
+
+    public boolean isSessionValid(String token) {
+        String sessionKey = "SESSION:" + token;
+        return redisTemplate.hasKey(sessionKey);
     }
 }

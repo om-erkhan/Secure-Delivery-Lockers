@@ -30,7 +30,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import java.time.Duration;
 
 
@@ -61,10 +60,6 @@ public class LockerService {
 
     @Autowired
     private Executor asyncExecutor;
-
-
-    @Autowired
-    private StringRedisTemplate redisTemplate;
 
 
     public Locker createLocker(LockerRequestDTO dto) throws Exception {
@@ -113,12 +108,12 @@ public class LockerService {
     }
 
     @Transactional
-    public LockerReservation reserveLocker( UUID lockerId, LockerReservationRequestDTO dto) throws Exception {
+    public LockerReservation reserveLocker(UUID lockerId, LockerReservationRequestDTO dto) throws Exception {
         User user = authUtils.getCurrentUser();
         if (user == null) {
             throw new RuntimeException("User Not Found.");
         }
-        Locker locker = lockerRepository.findById(lockerId)
+        lockerRepository.findById(lockerId)
                 .orElseThrow(() -> new RuntimeException("Locker not found with ID: " + lockerId));
 
         List<LockerSlot> freeSlots = lockerSlotRepository.findByLockerIdAndStatus(lockerId, LockerSlot.Status.FREE);
@@ -145,17 +140,11 @@ public class LockerService {
         int myOtp = Util.generateUniqueOtp(random, lockerReservationRepository);
         int otherOtp = Util.generateUniqueOtp(random, lockerReservationRepository);
 
-        String userOtpKey = "OTP:USER:" + user.getId() + ":" + lockerId;
-        String deliveryOtpKey = "OTP:DELIVERY:" + user.getId() + ":" + lockerId;
-
-        redisTemplate.opsForValue().set(userOtpKey, String.valueOf(myOtp), Duration.ofMinutes(5));
-        redisTemplate.opsForValue().set(deliveryOtpKey, String.valueOf(otherOtp), Duration.ofMinutes(30));
-
 
         LockerReservation reservation = LockerReservation.builder()
                 .lockerSlot(suitableSlot)
                 .userId(user.getId())
-                 .reservedAt(now)
+                .reservedAt(now)
                 .expiresAt(expiry)
                 .parcelValue(dto.getParcelValue())
                 .parcelDescription(dto.getParcelDescription())
@@ -177,35 +166,11 @@ public class LockerService {
     @Transactional
     public LockerReservation openLocker(Integer otp) {
 
-        LockerReservation reservation = null;
 
-        List<LockerReservation> activeReservations = lockerReservationRepository.findAll(); // keep original DB logic
-
-        for (LockerReservation r : activeReservations) {
-            String userKey = "OTP:USER:" + r.getUserId() + ":" + r.getId();
-            String deliveryKey = "OTP:DELIVERY:" + r.getUserId() + ":" + r.getId();
-
-            String cachedUserOtp = redisTemplate.opsForValue().get(userKey);
-            String cachedDeliveryOtp = redisTemplate.opsForValue().get(deliveryKey);
-
-            if (cachedUserOtp != null && otp.equals(Integer.parseInt(cachedUserOtp))) {
-                reservation = r;
-                redisTemplate.delete(userKey); // remove from cache
-                break;
-            } else if (cachedDeliveryOtp != null && otp.equals(Integer.parseInt(cachedDeliveryOtp))) {
-                reservation = r;
-                redisTemplate.delete(deliveryKey);
-                break;
-            }
-        }
-
-         if (reservation == null) {
-            reservation = lockerReservationRepository.findByAnyOtp(otp)
-                    .orElseThrow(() -> new RuntimeException("Invalid or expired OTP"));
-        }
+        List<LockerReservation> activeReservations = lockerReservationRepository.findAll();
 
 
-          reservation = lockerReservationRepository.findByAnyOtp(otp)
+        LockerReservation reservation = lockerReservationRepository.findByAnyOtp(otp)
                 .orElseThrow(() -> new RuntimeException("Invalid or expired OTP. Locker already accessed."));
         LockerSlot slot = reservation.getLockerSlot();
         User user = authRepository.findById(reservation.getUserId())
@@ -219,10 +184,10 @@ public class LockerService {
             reservation.setParcelPlacedAt(now);
             reservation.setLockerState(LockerReservation.LockerState.UNLOCKED);
             reservation.setStatus(LockerReservation.ReservationStatus.DELIVERED);
-            emailService.sendMail(user.getEmail(), "Locker Update", "Your Parcel has been placed successfully","");
-        } else if(otp.equals(reservation.getUserOtp()) && reservation.getParcelPlacedAt() == null){
+            emailService.sendMail(user.getEmail(), "Locker Update", "Your Parcel has been placed successfully", "");
+        } else if (otp.equals(reservation.getUserOtp()) && reservation.getParcelPlacedAt() == null) {
             throw new RuntimeException("The Parcel is not being delivered till now, please try again after parcel is delivered.");
-        }else if (otp.equals(reservation.getUserOtp())) {
+        } else if (otp.equals(reservation.getUserOtp())) {
             if (reservation.getParcelPickedAt() != null) {
                 throw new RuntimeException("This OTP has already been used to open the locker for pickup.");
             }
@@ -231,15 +196,17 @@ public class LockerService {
             reservation.setStatus(LockerReservation.ReservationStatus.PICKED_UP);
             slot.setStatus(LockerSlot.Status.FREE);
             lockerSlotRepository.save(slot);
-            emailService.sendMail(user.getEmail(), "Locker Update", "Your Parcel has been picked successfully, don't forget to rate us :P","");
+            emailService.sendMail(user.getEmail(), "Locker Update", "Your Parcel has been picked successfully, don't forget to rate us :P", "");
 
         }
         lockerReservationRepository.save(reservation);
         return reservation;
 
     }
-    public List<LockerReservation> getReservations() {
-        return lockerReservationRepository.findAll();
+
+    public List<LockerReservation> getReservations() throws Exception {
+         User currentUser = authUtils.getCurrentUser();
+         return lockerReservationRepository.findByUserId(currentUser.getId());
     }
 
 

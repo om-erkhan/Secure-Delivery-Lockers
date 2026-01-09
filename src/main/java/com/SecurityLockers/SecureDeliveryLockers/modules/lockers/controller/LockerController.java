@@ -77,8 +77,12 @@ public class LockerController {
     }
 
     @GetMapping("/get-reservations")
-    public ResponseEntity<?> getReservations(){
-        List<LockerReservation> reservations = lockerService.getReservations();
-        return ResponseBuilder.success(reservations, "All Reservations Fetched Successfully");
+    public ResponseEntity<?> getReservations() {
+        try {
+            List<LockerReservation> reservations = lockerService.getReservations();
+            return ResponseBuilder.success(reservations, "Your Reservations Fetched Successfully");
+        } catch (Exception e) {
+            return ResponseBuilder.error(HttpStatus.UNAUTHORIZED, e.getMessage());
+        }
     }
 }

@@ -7,6 +7,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
@@ -25,6 +26,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     @Autowired
     private AuthRepository userRepository;
+
+
+    @Autowired
+    private StringRedisTemplate redisTemplate;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -48,18 +53,25 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             User user = userRepository.findByEmail(userEmail).orElse(null);
+            String sessionKey = "SESSION:" + token;
+            String sessionEmail = redisTemplate.opsForValue().get(sessionKey);
 
-            if (user != null && jwtUtil.validateToken(token, user)) {
+            if (user != null && sessionEmail != null && sessionEmail.equals(userEmail)
+                    && jwtUtil.validateToken(token, user)) {
                 UsernamePasswordAuthenticationToken authToken =
                         new UsernamePasswordAuthenticationToken(
-                                userEmail,
+                                user,
                                 null,
                                 Collections.emptyList()
                         );
 
                 authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authToken);
+            }else {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
             }
+
         }
         System.out.println("Incoming request: " + request.getMethod() + " " + request.getRequestURI());
         System.out.println("Authorization header: " + request.getHeader("Authorization"));
