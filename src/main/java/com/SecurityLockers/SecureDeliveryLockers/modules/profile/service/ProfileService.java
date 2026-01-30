@@ -5,6 +5,7 @@ import com.SecurityLockers.SecureDeliveryLockers.modules.auth.model.UserProfile;
 import com.SecurityLockers.SecureDeliveryLockers.modules.auth.repository.AuthRepository;
 import com.SecurityLockers.SecureDeliveryLockers.modules.profile.dto.CreateProfileDto;
 import com.SecurityLockers.SecureDeliveryLockers.modules.profile.repository.ProfileRepository;
+import com.SecurityLockers.SecureDeliveryLockers.messaging.producer.FileUploadProducer;
 import com.SecurityLockers.SecureDeliveryLockers.services.S3Service;
 import com.SecurityLockers.SecureDeliveryLockers.utility.AuthUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +27,9 @@ public class ProfileService {
     private AuthRepository userRepository;
 
     @Autowired
+    private FileUploadProducer fileUploadProducer;
+
+    @Autowired
     private S3Service s3Service;
 
     @Autowired
@@ -41,21 +45,27 @@ public class ProfileService {
         }
 
 
-        String imageUrl = null;
-
-        if (dto.getProfileImage() != null && !dto.getProfileImage().isEmpty()) {
-            imageUrl = s3Service.uploadFile(dto.getProfileImage());
-        }
-
+        // Create profile first without image (will be updated after async upload)
         UserProfile profile = UserProfile.builder()
                 .fullName(dto.getFullName())
                 .phoneNumber(dto.getPhoneNumber())
                 .address(dto.getAddress())
                 .city(dto.getCity())
                 .state(dto.getState())
-                .profileImage(imageUrl)
+                .profileImage(null) // Will be updated after async upload
                 .user(user)
                 .build();
+        
+        // Queue file upload if image provided
+        if (dto.getProfileImage() != null && !dto.getProfileImage().isEmpty()) {
+            try {
+                fileUploadProducer.queueProfileImageUpload(dto.getProfileImage(), user.getId());
+                log.info("Profile image upload queued for user: {}", user.getId());
+            } catch (Exception e) {
+                log.error("Failed to queue profile image upload: {}", e.getMessage(), e);
+                // Continue without image - can be uploaded later
+            }
+        }
 
         user.setIsProfileCompleted(true);
 

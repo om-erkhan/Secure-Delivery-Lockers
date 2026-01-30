@@ -11,9 +11,11 @@ import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.model.LockerSlo
 import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.repository.LockerRepository;
 import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.repository.LockerReservationRepository;
 import com.SecurityLockers.SecureDeliveryLockers.modules.lockers.repository.LockerSlotRepository;
+import com.SecurityLockers.SecureDeliveryLockers.messaging.producer.EmailProducer;
+import com.SecurityLockers.SecureDeliveryLockers.messaging.producer.FileUploadProducer;
+import com.SecurityLockers.SecureDeliveryLockers.messaging.producer.ScheduledTaskProducer;
 import com.SecurityLockers.SecureDeliveryLockers.services.S3Service;
 import com.SecurityLockers.SecureDeliveryLockers.utility.AuthUtils;
-import com.SecurityLockers.SecureDeliveryLockers.utility.EmailService;
 import com.SecurityLockers.SecureDeliveryLockers.utility.Util;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
@@ -50,7 +52,13 @@ public class LockerService {
     private LockerSlotRepository lockerSlotRepository;
 
     @Autowired
-    private EmailService emailService;
+    private EmailProducer emailProducer;
+
+    @Autowired
+    private FileUploadProducer fileUploadProducer;
+
+    @Autowired
+    private ScheduledTaskProducer scheduledTaskProducer;
 
     @Autowired
     private S3Service s3Service;
@@ -63,22 +71,29 @@ public class LockerService {
 
 
     public Locker createLocker(LockerRequestDTO dto) throws Exception {
-        String imageUrl = null;
-
-        if (dto.getLockerImage() != null && !dto.getLockerImage().isEmpty()) {
-            imageUrl = s3Service.uploadFile(dto.getLockerImage());
-        }
-
+        // Create locker first without image
         Locker locker = Locker.builder()
                 .location(dto.getLocation())
                 .latitude(dto.getLatitude())
                 .longitude(dto.getLongitude())
                 .totalSlots(dto.getTotalSlots())
-                .lockerImage(imageUrl)
+                .lockerImage(null) // Will be updated after async upload
                 .createdAt(Instant.now())
                 .build();
         Locker savedLocker = lockerRepository.save(locker);
-        return lockerRepository.save(locker);
+
+        // Queue file upload if image provided
+        if (dto.getLockerImage() != null && !dto.getLockerImage().isEmpty()) {
+            try {
+                fileUploadProducer.queueLockerImageUpload(dto.getLockerImage(), savedLocker.getId());
+                log.info("Locker image upload queued for locker: {}", savedLocker.getId());
+            } catch (Exception e) {
+                log.error("Failed to queue locker image upload: {}", e.getMessage(), e);
+                // Continue without image - can be uploaded later
+            }
+        }
+
+        return savedLocker;
     }
 
 
@@ -156,10 +171,26 @@ public class LockerService {
                 .deliveryOtp(otherOtp)
                 .status(LockerReservation.ReservationStatus.ACTIVE)
                 .build();
-//        have to change the mailing address to the request user email
-        emailService.sendMail("omerkhan.dev1@gmail.com", String.valueOf(myOtp), String.valueOf(otherOtp));
+        // Save reservation first
+        LockerReservation savedReservation = lockerReservationRepository.save(reservation);
+        
+        // Queue email sending (using user's email instead of hardcoded)
+        emailProducer.sendReservationOtpEmail(user.getEmail(), String.valueOf(myOtp), String.valueOf(otherOtp));
+        
+        // Schedule reminder email 1 hour before expiration
+        Instant reminderTime = expiry.minusSeconds(3600); // 1 hour before expiration
+        if (reminderTime.isAfter(now)) {
+            scheduledTaskProducer.scheduleReminderNotification(
+                    savedReservation.getId(),
+                    user.getId(),
+                    user.getEmail(),
+                    reminderTime
+            );
+            log.info("Scheduled reminder notification for reservation {} at {}", 
+                    savedReservation.getId(), reminderTime);
+        }
 
-        return lockerReservationRepository.save(reservation);
+        return savedReservation;
     }
 
 
@@ -177,6 +208,22 @@ public class LockerService {
                 .orElseThrow(() -> new RuntimeException("User not found for this reservation."));
 
         Instant now = Instant.now();
+        
+        // Check if reservation has expired
+        if (reservation.getStatus() == LockerReservation.ReservationStatus.EXPIRED || 
+            (reservation.getExpiresAt() != null && reservation.getExpiresAt().isBefore(now))) {
+            
+            // Mark as expired if not already marked
+            if (reservation.getStatus() != LockerReservation.ReservationStatus.EXPIRED) {
+                reservation.setStatus(LockerReservation.ReservationStatus.EXPIRED);
+                lockerReservationRepository.save(reservation);
+            }
+            
+            // Send email telling user to renew OTP
+            emailProducer.sendRenewOtpRequiredEmail(user.getEmail());
+            
+            throw new RuntimeException("Your reservation has expired. Please renew your OTP from the app to access the locker.");
+        }
         if (otp.equals(reservation.getDeliveryOtp())) {
             if (reservation.getParcelPlacedAt() != null) {
                 throw new RuntimeException("This OTP has already been used to open the locker for delivery.");
@@ -184,7 +231,7 @@ public class LockerService {
             reservation.setParcelPlacedAt(now);
             reservation.setLockerState(LockerReservation.LockerState.UNLOCKED);
             reservation.setStatus(LockerReservation.ReservationStatus.DELIVERED);
-            emailService.sendMail(user.getEmail(), "Locker Update", "Your Parcel has been placed successfully", "");
+            emailProducer.sendParcelDeliveredEmail(user.getEmail());
         } else if (otp.equals(reservation.getUserOtp()) && reservation.getParcelPlacedAt() == null) {
             throw new RuntimeException("The Parcel is not being delivered till now, please try again after parcel is delivered.");
         } else if (otp.equals(reservation.getUserOtp())) {
@@ -196,7 +243,7 @@ public class LockerService {
             reservation.setStatus(LockerReservation.ReservationStatus.PICKED_UP);
             slot.setStatus(LockerSlot.Status.FREE);
             lockerSlotRepository.save(slot);
-            emailService.sendMail(user.getEmail(), "Locker Update", "Your Parcel has been picked successfully, don't forget to rate us :P", "");
+            emailProducer.sendParcelPickedUpEmail(user.getEmail());
 
         }
         lockerReservationRepository.save(reservation);

@@ -5,4 +5,5 @@ public enum AuthEnums {
     OTP_REQUIRED,
     OTP_SENT,
      WRONG_PASSWORD,
+    PROFILE_INCOMPLETE,
 }
